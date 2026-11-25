@@ -143,30 +143,17 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
 
 @media (prefers-reduced-motion: no-preference){ .tab-btn,.metric-btn{ transition:background .12s,color .12s,border-color .12s; } }
 
-.atlas-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 32px;
-  text-decoration: none;
-  font-weight: 600;
-  letter-spacing: .04em;
-}
-.atlas-action:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
-.atlas-github { grid-column: 1 / -1; }
-#atlas-data-dialog {
-  width: min(320px, calc(100% - 32px));
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-#atlas-data-dialog::backdrop { background: rgba(20, 30, 40, .5); }
-#atlas-data-dialog h2 { font-size: 14.5px; font-weight: 600; }
-.atlas-downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
-#atlas-data-dialog form { display: flex; justify-content: flex-end; }
+/* ---- ABOUT / DATA / GitHub actions ---- */
+.atlas-action{ display:inline-flex; align-items:center; justify-content:center; min-height:32px;
+  text-decoration:none; font-weight:600; letter-spacing:.04em; }
+.atlas-action:focus-visible{ outline:2px solid var(--accent-ink); outline-offset:2px; }
+.atlas-github{ grid-column:1 / -1; }
+#atlas-data-dialog{ width:min(320px, calc(100% - 32px)); padding:16px; border:1px solid var(--line);
+  border-radius:10px; background:var(--surface); color:var(--ink); box-shadow:var(--shadow); }
+#atlas-data-dialog::backdrop{ background:rgba(20,30,40,.5); }
+#atlas-data-dialog h2{ font-size:14.5px; font-weight:600; }
+.atlas-downloads{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+#atlas-data-dialog form{ display:flex; justify-content:flex-end; }
 </style>
 </head>
 <body>
@@ -210,14 +197,14 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
            rel="noopener" aria-label="ABOUT (methodological report, opens in a new tab)">ABOUT</a>
         <button class="metric-btn atlas-action" type="button" id="atlas-data-button"
                 aria-haspopup="dialog" aria-controls="atlas-data-dialog">DATA</button>
-        <a class="metric-btn atlas-action atlas-github"
-           href="https://github.com/kfilonchik/aml-accessibility" target="_blank"
-           rel="noopener noreferrer" aria-label="GitHub repository (opens in a new tab)">GitHub</a>
+        <a class="metric-btn atlas-action atlas-github" href="https://github.com/kfilonchik/aml-accessibility"
+           target="_blank" rel="noopener" aria-label="GitHub repository (opens in a new tab)">GitHub</a>
       </div>
+
       <div class="block atlas-kpi-section">
         <div class="kpi-row">
-        <div class="kpi"><span class="n tabular" id="kpi-parishes">—</span><span class="l">Parishes</span></div>
-        <div class="kpi"><span class="n tabular" id="kpi-population">—</span><span class="l">Population</span></div>
+          <div class="kpi"><span class="n tabular" id="kpi-parishes">—</span><span class="l">Parishes</span></div>
+          <div class="kpi"><span class="n tabular" id="kpi-population">—</span><span class="l">Population</span></div>
         </div>
       </div>
 
@@ -245,7 +232,7 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
         <div class="block-label">Sustainability vs. accessibility</div>
         <div class="desc" style="font-size:12px;color:var(--ink-dim);line-height:1.5;">
           Each dot is one parish: min–max normalized accessibility, 0–100 (x-axis) against TSI (y-axis),
-          colored by time to reach 25% of the AML's population. Click a dot to select that parish.
+          colored by time to reach 25% of the AML's population and sized by parish population. Click a dot to select that parish.
         </div>
         <svg id="scatter-svg" viewBox="0 0 280 220" style="width:100%;height:auto;margin-top:6px;"></svg>
         <div class="legend-note" id="scatter-note"></div>
@@ -477,12 +464,32 @@ function renderScatter(){
     <text x="${M.l-4}" y="${yScale(v)+3}" font-size="8" text-anchor="end" fill="var(--ink-dim)">${v}</text>`).join("");
 
   const timeCls = classify("time_to_pop_25", features, GOOD_LOW);
-  const dots = features.map(f=>{
+
+  // Bubble size: area proportional to parish population (sqrt scale).
+  const R_MIN = 1.5, R_MAX = 9;
+  const popMax = Math.max(1, ...features.map(f=>f.properties.N_INDIVIDUOS||0));
+  const rScale = pop => Math.max(R_MIN, R_MAX * Math.sqrt((pop||0) / popMax));
+
+  // Draw biggest bubbles first so small parishes stay visible and clickable on top.
+  const ordered = features.slice().sort((a,b)=>(b.properties.N_INDIVIDUOS||0)-(a.properties.N_INDIVIDUOS||0));
+  const dots = ordered.map(f=>{
     const p = f.properties;
     const cx = xScale(p.access_raw_normalized), cy = yScale(p.TSI);
     const color = colorForValue(p.time_to_pop_25, timeCls);
-    return `<circle class="scatter-dot" data-dicofre="${p.Dicofre}" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3"
-      fill="${color}" fill-opacity="0.85" stroke="#fff" stroke-width="0.5" style="cursor:pointer;"><title>${p.Freguesia}</title></circle>`;
+    return `<circle class="scatter-dot" data-dicofre="${p.Dicofre}" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rScale(p.N_INDIVIDUOS).toFixed(2)}"
+      fill="${color}" fill-opacity="0.75" stroke="var(--ink)" stroke-opacity="0.35" stroke-width="0.4" style="cursor:pointer;"><title>${p.Freguesia} · pop. ${fmt(p.N_INDIVIDUOS,0)}</title></circle>`;
+  }).join("");
+
+  // Size legend: up to three "nice" population values not exceeding the max.
+  const NICE = [1000,2500,5000,10000,25000,50000,100000,250000];
+  const legendPops = NICE.filter(v=>v<=popMax).slice(-3);
+  let lx = 4;
+  const sizeLegend = legendPops.map(v=>{
+    const r = rScale(v), cx = lx + r;
+    const label = v>=1000 ? `${fmt(v/1000,1)}k` : fmt(v,0);
+    lx = cx + r + 4 + label.length*5 + 8;
+    return `<circle cx="${cx}" cy="${R_MAX+2}" r="${r}" fill="none" stroke="var(--ink-dim)" stroke-width="0.6"/>
+      <text x="${cx + r + 4}" y="${R_MAX+5}" font-size="9" fill="var(--ink-dim)">${label}</text>`;
   }).join("");
 
   const svg = document.getElementById("scatter-svg");
@@ -493,7 +500,9 @@ function renderScatter(){
     ${dots}
   `;
   document.getElementById("scatter-note").innerHTML =
-    `Dot color = time to reach 25% of AML population (blue fast → red slow / grey unreached), same scale as the "Travel time" tab.`;
+    `Dot color = time to reach 25% of AML population (blue fast → red slow / grey unreached), same scale as the "Travel time" tab.
+     Dot size = parish population:
+     <svg viewBox="0 0 ${Math.ceil(lx)} ${2*R_MAX+4}" style="display:block;width:${Math.ceil(lx)}px;max-width:100%;height:auto;margin-top:4px;">${sizeLegend}</svg>`;
 
   svg.querySelectorAll(".scatter-dot").forEach(el=>{
     el.addEventListener("click", ()=>{
