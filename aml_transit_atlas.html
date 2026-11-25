@@ -142,6 +142,32 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
 .popup-row b{ font-family:'IBM Plex Mono',monospace; }
 
 @media (prefers-reduced-motion: no-preference){ .tab-btn,.metric-btn{ transition:background .12s,color .12s,border-color .12s; } }
+
+.atlas-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: .04em;
+}
+.atlas-action:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.atlas-github { grid-column: 1 / -1; }
+.atlas-github:disabled { opacity: .6; cursor: default; border-color: var(--line); color: var(--ink-dim); }
+#atlas-data-dialog {
+  width: min(320px, calc(100% - 32px));
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+#atlas-data-dialog::backdrop { background: rgba(20, 30, 40, .5); }
+#atlas-data-dialog h2 { font-size: 14.5px; font-weight: 600; }
+.atlas-downloads { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+#atlas-data-dialog form { display: flex; justify-content: flex-end; }
 </style>
 </head>
 <body>
@@ -181,17 +207,26 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
   <div id="shell">
     <aside id="sidebar">
       <div class="kpi-row">
+        <a class="metric-btn atlas-action" href="AML_accessibility_methodological_report.pdf" target="_blank"
+           rel="noopener" aria-label="ABOUT (methodological report, opens in a new tab)">ABOUT</a>
+        <button class="metric-btn atlas-action" type="button" id="atlas-data-button"
+                aria-haspopup="dialog" aria-controls="atlas-data-dialog">DATA</button>
+        <button class="metric-btn atlas-action atlas-github" type="button" disabled>GitHub</button>
+      </div>
+      <div class="block atlas-kpi-section">
+        <div class="kpi-row">
         <div class="kpi"><span class="n tabular" id="kpi-parishes">—</span><span class="l">Parishes</span></div>
         <div class="kpi"><span class="n tabular" id="kpi-population">—</span><span class="l">Population</span></div>
+        </div>
       </div>
 
       <div class="block">
         <div class="block-label">Base layer</div>
         <nav class="tabs">
           <button class="tab-btn active" data-tab="sustain">Sustainability (TSI)</button>
-          <button class="tab-btn" data-tab="mode">Transport mode share</button>
           <button class="tab-btn" data-tab="access">PT accessibility</button>
           <button class="tab-btn" data-tab="time">Travel time (AML-wide)</button>
+          <button class="tab-btn" data-tab="mode">Transport mode share</button>
         </nav>
       </div>
 
@@ -208,7 +243,7 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
       <div class="block">
         <div class="block-label">Sustainability vs. accessibility</div>
         <div class="desc" style="font-size:12px;color:var(--ink-dim);line-height:1.5;">
-          Each dot is one parish: PT accessibility, % of AML population reachable (x-axis) against TSI (y-axis),
+          Each dot is one parish: min–max normalized accessibility, 0–100 (x-axis) against TSI (y-axis),
           colored by time to reach 25% of the AML's population. Click a dot to select that parish.
         </div>
         <svg id="scatter-svg" viewBox="0 0 280 220" style="width:100%;height:auto;margin-top:6px;"></svg>
@@ -325,13 +360,12 @@ const PANELS = {
   },
   access: {
     source:"parish", title:"Public-transport accessibility",
-    desc:"Population-weighted average impedance to reachable population: Σ population_j × S(travel_time) / Σ population_j, summed over destinations actually reachable within 120 min (S a sigmoid impedance function; origin excluded from both sums), rolled up from BGRI cells to parish by population-weighted mean.",
+    desc:"Raw weighted accessible population is min–max normalized to 0–100 across AML BGRI origins, then averaged by parish using origin population weights. Destinations include AML and the 75 km buffer.",
     metrics:[
-      {key:"access_pct", label:"Accessibility score (%)", ramp:GOOD_HIGH},
-      {key:"access_raw", label:"Raw score", ramp:GOOD_HIGH},
+      {key:"access_raw_normalized", label:"Normalized accessibility (0–100)", ramp:GOOD_HIGH},
     ], unit:"", kind:"quantile",
-    popup(p){ return [["title",p.Freguesia],["Accessibility",fmt(p.access_pct,2)+"%"],
-      ["Raw score",fmt(p.access_raw,0)],["Population",fmt(p.N_INDIVIDUOS,0)]]; },
+    popup(p){ return [["title",p.Freguesia],["Normalized accessibility",fmt(p.access_raw_normalized,2)+" / 100"],
+      ["Population",fmt(p.N_INDIVIDUOS,0)]]; },
   },
   time: {
     source:"parish", title:"Time to reach AML population",
@@ -391,7 +425,7 @@ function applyLayer(){
   let legendRows = colors.map((c,i)=>{
     let lo=edges[i], hi=edges[i+1], label;
     if (hasZeroBucket && i===0) label = "0";
-    else label = `${fmt(lo,1)}–${fmt(hi,1)}${cfg.unit}`;
+    else label = `${fmt(lo,1)}–${fmt(hi,1)}${metricCfg.unit ?? cfg.unit}`;
     return `<div class="legend-row"><span class="sw" style="background:${c}"></span><span class="rg">${label}</span></div>`;
   }).join("");
   if (hasNoAccess) legendRows += `<div class="legend-row"><span class="sw" style="background:${NO_ACCESS_COLOR}"></span><span class="rg">Not reached within 120 min</span></div>`;
@@ -416,25 +450,24 @@ function renderSelectedParish(p){
     <div class="stat-row"><span>PT share</span><b>${fmt(p.pct_pt,1)}%</b></div>
     <div class="stat-row"><span>Car share</span><b>${fmt(p.pct_car,1)}%</b></div>
     <div class="stat-row"><span>Active share</span><b>${fmt(p.pct_active,1)}%</b></div>
-    <div class="stat-row"><span>PT accessibility</span><b>${fmt(p.access_pct,2)}%</b></div>
+    <div class="stat-row"><span>Normalized accessibility (0–100)</span><b>${fmt(p.access_raw_normalized,2)}</b></div>
     <div class="stat-row"><span>Time to 25% of pop.</span><b>${fmt(p.time_to_pop_25,0)} min</b></div>
   `;
 }
 
 // ---- sustainability-vs-accessibility scatter --------------------------
 function renderScatter(){
-  const features = data.parish.features;
+  const features = data.parish.features.filter(f=>
+    Number.isFinite(f.properties.access_raw_normalized) && Number.isFinite(f.properties.TSI));
   const W=280, H=220, M={l:34, r:8, t:8, b:28};
-  const xs = features.map(f=>f.properties.access_pct);
-  // TSI is min-max normalised to 0-100 by construction (01_sustainability_index.py),
-  // so the y-axis uses that fixed range; accessibility has no natural 0-100 bound,
-  // so its x-axis is scaled to the actual data range instead.
-  const xMin = 0, xMax = Math.max(...xs) * 1.05;
+  // Show the observed parish accessibility range; TSI stays on 0–100.
+  const xMin = features.length ? Math.min(...features.map(f=>f.properties.access_raw_normalized)) : 0;
+  const xMax = features.length ? Math.max(...features.map(f=>f.properties.access_raw_normalized)) : 100;
   const yMin = 0, yMax = 100;
-  const xScale = v => M.l + (v-xMin)/(xMax-xMin) * (W-M.l-M.r);
+  const xScale = v => M.l + (v-xMin)/(xMax-xMin || 1) * (W-M.l-M.r);
   const yScale = v => H-M.b - (v-yMin)/(yMax-yMin) * (H-M.t-M.b);
 
-  const xTicks = [0, xMax/2, xMax];
+  const xTicks = [...new Set([xMin, (xMin+xMax)/2, xMax])];
   const gridX = xTicks.map(v=>`
     <line x1="${xScale(v)}" y1="${M.t}" x2="${xScale(v)}" y2="${H-M.b}" stroke="var(--line)" stroke-width="0.5"/>
     <text x="${xScale(v)}" y="${H-M.b+12}" font-size="8" text-anchor="middle" fill="var(--ink-dim)">${fmt(v,1)}</text>`).join("");
@@ -445,7 +478,7 @@ function renderScatter(){
   const timeCls = classify("time_to_pop_25", features, GOOD_LOW);
   const dots = features.map(f=>{
     const p = f.properties;
-    const cx = xScale(p.access_pct), cy = yScale(p.TSI);
+    const cx = xScale(p.access_raw_normalized), cy = yScale(p.TSI);
     const color = colorForValue(p.time_to_pop_25, timeCls);
     return `<circle class="scatter-dot" data-dicofre="${p.Dicofre}" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3"
       fill="${color}" fill-opacity="0.85" stroke="#fff" stroke-width="0.5" style="cursor:pointer;"><title>${p.Freguesia}</title></circle>`;
@@ -454,7 +487,7 @@ function renderScatter(){
   const svg = document.getElementById("scatter-svg");
   svg.innerHTML = `
     ${gridX}${gridY}
-    <text x="${(M.l+W-M.r)/2}" y="${H-4}" font-size="9" text-anchor="middle" fill="var(--ink-dim)">Accessibility score (%)</text>
+    <text x="${(M.l+W-M.r)/2}" y="${H-4}" font-size="9" text-anchor="middle" fill="var(--ink-dim)">Normalized accessibility (0–100)</text>
     <text x="10" y="${(M.t+H-M.b)/2}" font-size="9" text-anchor="middle" fill="var(--ink-dim)" transform="rotate(-90 10 ${(M.t+H-M.b)/2})">TSI (sustainability)</text>
     ${dots}
   `;
@@ -471,7 +504,7 @@ function renderScatter(){
       renderSelectedParish(p);
       if (popup){
         popup.setLngLat([p.lon, p.lat])
-          .setHTML(`<div class="popup-title">${p.Freguesia}</div><div class="popup-row"><span>TSI</span><b>${fmt(p.TSI,1)}</b></div><div class="popup-row"><span>Accessibility</span><b>${fmt(p.access_pct,2)}%</b></div>`)
+          .setHTML(`<div class="popup-title">${p.Freguesia}</div><div class="popup-row"><span>TSI</span><b>${fmt(p.TSI,1)}</b></div><div class="popup-row"><span>Normalized accessibility</span><b>${fmt(p.access_raw_normalized,2)} / 100</b></div>`)
           .addTo(map);
       }
     });
@@ -543,6 +576,22 @@ map.on("load", async ()=>{
   map.on("mouseenter", "parish-fill", ()=>{ map.getCanvas().style.cursor="pointer"; });
   map.on("mouseleave", "parish-fill", ()=>{ map.getCanvas().style.cursor=""; });
 });
+</script>
+
+<dialog id="atlas-data-dialog" aria-labelledby="atlas-data-title">
+  <h2 id="atlas-data-title">Download parish data</h2>
+  <div class="atlas-downloads">
+    <a class="metric-btn atlas-action" href="parish.geojson" download>GEOJSON</a>
+    <a class="metric-btn atlas-action" href="AML_accessibility_parishes.csv" download>CSV</a>
+  </div>
+  <form method="dialog">
+    <button class="metric-btn atlas-action" type="submit" autofocus>Close</button>
+  </form>
+</dialog>
+<script>
+  document.getElementById("atlas-data-button").addEventListener("click", () => {
+    document.getElementById("atlas-data-dialog").showModal();
+  });
 </script>
 </body>
 </html>
