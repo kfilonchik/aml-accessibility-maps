@@ -154,7 +154,6 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
 }
 .atlas-action:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
 .atlas-github { grid-column: 1 / -1; }
-.atlas-github:disabled { opacity: .6; cursor: default; border-color: var(--line); color: var(--ink-dim); }
 #atlas-data-dialog {
   width: min(320px, calc(100% - 32px));
   padding: 16px;
@@ -211,7 +210,9 @@ table.stats-tbl td{ text-align:right; padding:2.5px 4px; font-family:'IBM Plex M
            rel="noopener" aria-label="ABOUT (methodological report, opens in a new tab)">ABOUT</a>
         <button class="metric-btn atlas-action" type="button" id="atlas-data-button"
                 aria-haspopup="dialog" aria-controls="atlas-data-dialog">DATA</button>
-        <button class="metric-btn atlas-action atlas-github" type="button" disabled>GitHub</button>
+        <a class="metric-btn atlas-action atlas-github"
+           href="https://github.com/kfilonchik/aml-accessibility" target="_blank"
+           rel="noopener noreferrer" aria-label="GitHub repository (opens in a new tab)">GitHub</a>
       </div>
       <div class="block atlas-kpi-section">
         <div class="kpi-row">
